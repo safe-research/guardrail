@@ -12,7 +12,8 @@ contract GuardrailScript is Script {
     function run() public {
         vm.startBroadcast();
 
-        guardrail = new Guardrail();
+        uint256 delay = 0;
+        guardrail = new Guardrail(delay);
 
         vm.stopBroadcast();
     }
