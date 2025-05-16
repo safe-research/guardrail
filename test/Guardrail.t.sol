@@ -8,7 +8,8 @@ contract GuardrailTest is Test {
     Guardrail public guardrail;
 
     function setUp() public {
-        guardrail = new Guardrail();
+        uint256 delay = 0;
+        guardrail = new Guardrail(delay);
     }
 
     function testGuardrailDeployment() public view {
