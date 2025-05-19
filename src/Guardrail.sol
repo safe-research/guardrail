@@ -237,6 +237,10 @@ contract Guardrail is ITransactionGuard, IModuleGuard {
         override
         returns (bytes32)
     {
+        if (_checkAllowedDelegate(msg.sender, to)) {
+            return;
+        }
+
         _delegateCallNotAllowed(operation);
         return bytes32(0);
     }
