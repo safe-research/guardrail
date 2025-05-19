@@ -231,12 +231,15 @@ contract Guardrail is ITransactionGuard, IModuleGuard {
     /**
      * @inheritdoc IModuleGuard
      */
-    function checkModuleTransaction(address, uint256, bytes calldata, Enum.Operation operation, address)
+    function checkModuleTransaction(address to, uint256, bytes calldata, Enum.Operation operation, address)
         external
-        pure
         override
         returns (bytes32)
     {
+        if (_checkAllowedDelegate(msg.sender, to)) {
+            return bytes32(0);
+        }
+
         _delegateCallNotAllowed(operation);
         return bytes32(0);
     }
