@@ -148,7 +148,11 @@ contract Guardrail is ITransactionGuard, IModuleGuard {
      * @dev This will fail if the delegate allowance is not scheduled
      */
     function delegateAllowance(address safe, address to, bool oneTimeAllowance, bool reset) public {
-        _delegateAllowance(safe, to, oneTimeAllowance, reset ? 0 : DELAY + block.timestamp);
+        if (reset) {
+            delete delegatedAllowance[safe][to];
+        } else {
+            _delegateAllowance(safe, to, oneTimeAllowance, DELAY + block.timestamp);
+        }
     }
 
     /**
