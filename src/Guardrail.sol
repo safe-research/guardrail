@@ -4,29 +4,26 @@ pragma solidity =0.8.28;
 import {ITransactionGuard, IERC165, GuardManager} from "safe-smart-account/contracts/base/GuardManager.sol";
 import {IModuleGuard} from "safe-smart-account/contracts/base/ModuleManager.sol";
 import {Enum} from "safe-smart-account/contracts/libraries/Enum.sol";
+import {SafeInterface} from "./interfaces/SafeInterface.sol";
 
 contract Guardrail is ITransactionGuard, IModuleGuard {
     /**
      * @notice The allowance struct to store the status of the delegate
-     * @param allowed The status of the delegate
      * @param oneTimeAllowance The status of the one time allowance
+     * @param allowedTimestamp The timestamp from when the delegate is allowed
      * @dev The one time allowance is used to allow the delegate to execute a transaction only once
      */
     struct Allowance {
-        bool allowed;
         bool oneTimeAllowance;
+        uint248 allowedTimestamp;
     }
 
     /**
-     * @notice The allowance schedule struct to store the timestamp and one time allowance status
-     * @param timestamp The timestamp of the schedule
-     * @param oneTimeAllowance The status of the one time allowance
-     * @dev The one time allowance is used to allow the delegate to execute a transaction only once
+     * @notice The storage slot for the guard
+     * @dev This is used to check if the guard is set
+     *      Value = `keccak256("guard_manager.guard.address")`
      */
-    struct AllowanceSchedule {
-        uint256 timestamp;
-        bool oneTimeAllowance;
-    }
+    bytes32 public constant GUARD_STORAGE_SLOT = 0x4a204f620c8c5ccdca3fd54d003badd85ba500436a431f0cbda4f558c93c34c8;
 
     /**
      * @notice The delay for the guard removal and delegate allowance
@@ -49,14 +46,6 @@ contract Guardrail is ITransactionGuard, IModuleGuard {
     mapping(address safe => mapping(address to => Allowance allowance)) public delegatedAllowance;
 
     /**
-     * @notice The schedule for the delegated allowance update
-     * @dev safe The address of the safe
-     *      to The address of the delegate
-     *      allowanceSchedule The schedule for the delegated allowance
-     */
-    mapping(address safe => mapping(address to => AllowanceSchedule allowanceSchedule)) public delegatedUpdateSchedule;
-
-    /**
      * @notice Event emitted when the guard removal is scheduled
      * @param safe The address of the safe
      * @param timestamp The timestamp of the schedule
@@ -64,21 +53,13 @@ contract Guardrail is ITransactionGuard, IModuleGuard {
     event GuardRemovalScheduled(address indexed safe, uint256 timestamp);
 
     /**
-     * @notice Event emitted when the delegate allowance is scheduled
-     * @param safe The address of the safe
-     * @param to The address of the delegate
-     * @param timestamp The timestamp of the schedule
-     */
-    event DelegateAllowanceScheduled(address indexed safe, address indexed to, uint256 timestamp);
-
-    /**
      * @notice Event emitted when the delegate allowance is updated
      * @param safe The address of the safe
      * @param to The address of the delegate
-     * @param newAllowance The status of the new allowance
      * @param oneTimeAllowance The status of the one time allowance
+     * @param timestamp The timestamp at which the delegate is allowed
      */
-    event DelegateAllowanceUpdated(address indexed safe, address indexed to, bool newAllowance, bool oneTimeAllowance);
+    event DelegateAllowanceUpdated(address indexed safe, address indexed to, bool oneTimeAllowance, uint256 timestamp);
 
     /**
      * @notice Error indicating invalid timestamp
@@ -87,9 +68,15 @@ contract Guardrail is ITransactionGuard, IModuleGuard {
     error InvalidTimestamp();
 
     /**
-     * @notice Error indicating that the operation DelegateCall is not allowed
+     * @notice Error indicating that the guard is already set
      */
-    error DelegateCallNotAllowed();
+    error GuardAlreadySet();
+
+    /**
+     * @notice Error indicating that the operation DelegateCall is not allowed
+     * @param to The address of the delegate to which the operation is not allowed
+     */
+    error DelegateCallNotAllowed(address to);
 
     /**
      * @notice Error indicating that the selector is invalid
@@ -124,32 +111,48 @@ contract Guardrail is ITransactionGuard, IModuleGuard {
     }
 
     /**
-     * @notice Function to schedule the delegate allowance
+     * @notice Function to set the delegate allowance immediately
      * @param to The address of the delegate
      * @param oneTime The status of the one time allowance
-     * @dev The one time allowance is used to allow the delegate to execute a transaction only once
+     * @dev This can be used to set the delegate allowance immediately if the guard is not set
      */
-    function scheduleDelegateAllowance(address to, bool oneTime) public {
-        delegatedUpdateSchedule[msg.sender][to] = AllowanceSchedule(DELAY + block.timestamp, oneTime);
+    function immediateDelegateAllowance(address to, bool oneTime) public {
+        require(
+            abi.decode(SafeInterface(msg.sender).getStorageAt(uint256(GUARD_STORAGE_SLOT), 1), (address)) == address(0),
+            GuardAlreadySet()
+        );
 
-        emit DelegateAllowanceScheduled(msg.sender, to, DELAY + block.timestamp);
+        _delegateAllowance(msg.sender, to, oneTime, block.timestamp);
+    }
+
+    /**
+     * @notice Internal function to set the delegate allowance
+     * @param safe The address of the safe
+     * @param to The address of the delegate
+     * @param timestamp The timestamp at which the delegate is allowed
+     * @param oneTimeAllowance The status of the one time allowance
+     * @dev This will emit the DelegateAllowanceUpdated event
+     */
+    function _delegateAllowance(address safe, address to, bool oneTimeAllowance, uint256 timestamp) internal {
+        delegatedAllowance[safe][to] = Allowance(oneTimeAllowance, uint248(timestamp));
+
+        emit DelegateAllowanceUpdated(safe, to, oneTimeAllowance, timestamp);
     }
 
     /**
      * @notice Function to update the delegate allowance
      * @param safe The address of the safe
      * @param to The address of the delegate
+     * @param oneTimeAllowance The status of the one time allowance
+     * @param reset true if the delegate allowance should be reset
      * @dev This will fail if the delegate allowance is not scheduled
      */
-    function delegateAllowance(address safe, address to) public {
-        AllowanceSchedule memory allowanceSchedule = delegatedUpdateSchedule[safe][to];
-        require(allowanceSchedule.timestamp > 0 && allowanceSchedule.timestamp < block.timestamp, InvalidTimestamp());
-
-        bool oldAllowance = delegatedAllowance[safe][to].allowed;
-        delegatedAllowance[safe][to] = Allowance(!oldAllowance, allowanceSchedule.oneTimeAllowance);
-        delete delegatedUpdateSchedule[safe][to];
-
-        emit DelegateAllowanceUpdated(safe, to, !oldAllowance, allowanceSchedule.oneTimeAllowance);
+    function delegateAllowance(address safe, address to, bool oneTimeAllowance, bool reset) public {
+        if (reset) {
+            delete delegatedAllowance[safe][to];
+        } else {
+            _delegateAllowance(safe, to, oneTimeAllowance, DELAY + block.timestamp);
+        }
     }
 
     /**
@@ -168,30 +171,25 @@ contract Guardrail is ITransactionGuard, IModuleGuard {
     }
 
     /**
-     * @notice Function to check if the delegate is allowed
+     * @notice Function to check if the delegate is allowed if the operation is delegate call
      * @param safe The address of the safe
      * @param to The address of the delegate
-     * @return allowed The status of the delegate
-     * @dev This will return true if the delegate is allowed and false if the delegate is not allowed. This will also
+     * @param operation The operation to check
+     * @dev This will revert if the operation is delegate call, but the {to} is not a allowed delegate. This will also
      *      remove the delegate allowance if the one time allowance is set
      */
-    function _checkAllowedDelegate(address safe, address to) internal returns (bool allowed) {
-        Allowance memory allowance = delegatedAllowance[safe][to];
-        if (allowance.allowed) {
+    function _checkOperationAndAllowance(address safe, address to, Enum.Operation operation) internal {
+        if (operation == Enum.Operation.DelegateCall) {
+            Allowance memory allowance = delegatedAllowance[safe][to];
+            require(
+                allowance.allowedTimestamp > 0 && allowance.allowedTimestamp < block.timestamp,
+                DelegateCallNotAllowed(to)
+            );
+
             if (allowance.oneTimeAllowance) {
                 delete delegatedAllowance[safe][to];
             }
-            allowed = true;
         }
-    }
-
-    /**
-     * @notice Internal function to check if the operation is DelegateCall
-     * @param operation The operation to check
-     * @dev This will revert if the operation is DelegateCall
-     */
-    function _delegateCallNotAllowed(Enum.Operation operation) internal pure {
-        require(operation != Enum.Operation.DelegateCall, DelegateCallNotAllowed());
     }
 
     /**
@@ -216,11 +214,7 @@ contract Guardrail is ITransactionGuard, IModuleGuard {
             _removeGuard(msg.sender);
         }
 
-        if (_checkAllowedDelegate(msg.sender, to)) {
-            return;
-        }
-
-        _delegateCallNotAllowed(operation);
+        _checkOperationAndAllowance(msg.sender, to, operation);
     }
 
     /**
@@ -236,11 +230,8 @@ contract Guardrail is ITransactionGuard, IModuleGuard {
         override
         returns (bytes32)
     {
-        if (_checkAllowedDelegate(msg.sender, to)) {
-            return bytes32(0);
-        }
+        _checkOperationAndAllowance(msg.sender, to, operation);
 
-        _delegateCallNotAllowed(operation);
         return bytes32(0);
     }
 
