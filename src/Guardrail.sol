@@ -177,7 +177,7 @@ contract Guardrail is ITransactionGuard, IModuleGuard {
      * @dev This will revert if the operation is delegate call, but the {to} is not a allowed delegate. This will also
      *      remove the delegate allowance if the one time allowance is set
      */
-    function _checkOperationAndAllowance(address safe, address to, Enum.Operation operation) internal {
+    function _checkOperationAndAllowance(address safe, address to, Enum.Operation operation) internal virtual {
         if (operation == Enum.Operation.DelegateCall) {
             Allowance memory allowance = delegatedAllowance[safe][to];
             require(
