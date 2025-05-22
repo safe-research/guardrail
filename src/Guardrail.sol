@@ -5,8 +5,9 @@ import {ITransactionGuard, IERC165, GuardManager} from "safe-smart-account/contr
 import {IModuleGuard} from "safe-smart-account/contracts/base/ModuleManager.sol";
 import {Enum} from "safe-smart-account/contracts/libraries/Enum.sol";
 import {SafeInterface} from "./interfaces/SafeInterface.sol";
+import {MultiSendCallOnlyv2, MultiSendCallOnly} from "./MultiSendCallOnlyv2.sol";
 
-contract Guardrail is ITransactionGuard, IModuleGuard {
+contract Guardrail is ITransactionGuard, IModuleGuard, MultiSendCallOnlyv2 {
     /**
      * @notice The allowance struct to store the status of the delegate
      * @param oneTimeAllowance The status of the one time allowance
@@ -176,8 +177,21 @@ contract Guardrail is ITransactionGuard, IModuleGuard {
      * @param operation The operation to check
      * @dev This will revert if the operation is delegate call, but the {to} is not a allowed delegate. This will also
      *      remove the delegate allowance if the one time allowance is set
+     *      This will allow the delegate call if the {to} is the guard contract itself (for MultiSendCallOnly functionality)
      */
-    function _checkOperationAndAllowance(address safe, address to, Enum.Operation operation) internal virtual {
+    function _checkOperationAndAllowance(address safe, address to, bytes4 selector, Enum.Operation operation)
+        internal
+    {
+        if (
+            to == address(this)
+                && (
+                    selector == MultiSendCallOnly.multiSend.selector
+                        || selector == MultiSendCallOnlyv2.multiSendNoValue.selector
+                )
+        ) {
+            return;
+        }
+
         if (operation == Enum.Operation.DelegateCall) {
             Allowance memory allowance = delegatedAllowance[safe][to];
             require(
@@ -213,7 +227,7 @@ contract Guardrail is ITransactionGuard, IModuleGuard {
             _removeGuard(msg.sender);
         }
 
-        _checkOperationAndAllowance(msg.sender, to, operation);
+        _checkOperationAndAllowance(msg.sender, to, selector, operation);
     }
 
     /**
@@ -224,12 +238,12 @@ contract Guardrail is ITransactionGuard, IModuleGuard {
     /**
      * @inheritdoc IModuleGuard
      */
-    function checkModuleTransaction(address to, uint256, bytes calldata, Enum.Operation operation, address)
+    function checkModuleTransaction(address to, uint256, bytes calldata data, Enum.Operation operation, address)
         external
         override
         returns (bytes32)
     {
-        _checkOperationAndAllowance(msg.sender, to, operation);
+        _checkOperationAndAllowance(msg.sender, to, _decodeSelector(data), operation);
 
         return bytes32(0);
     }

@@ -15,6 +15,7 @@ docs/
 
 # Foundry gas snapshot
 .gas-snapshot
+snapshots/
 
 # VS Code
 .vscode/
