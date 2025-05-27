@@ -19,3 +19,6 @@ snapshots/
 
 # VS Code
 .vscode/
+
+# Certora
+.certora_internal
