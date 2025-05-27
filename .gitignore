@@ -13,9 +13,13 @@ docs/
 # Dotenv file
 .env
 
-# Foundry gas snapshot
+# Foundry
 .gas-snapshot
 snapshots/
+lcov.info
 
 # VS Code
 .vscode/
+
+# Certora
+.certora_internal
