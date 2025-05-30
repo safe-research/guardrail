@@ -27,6 +27,14 @@ contract Guardrail is ITransactionGuard, IModuleGuard, MultiSendCallOnlyv2 {
     bytes32 public constant GUARD_STORAGE_SLOT = 0x4a204f620c8c5ccdca3fd54d003badd85ba500436a431f0cbda4f558c93c34c8;
 
     /**
+     * @notice The storage slot for the module guard
+     * @dev This is used to check if the module guard is set
+     *      Value = `keccak256("module_manager.module_guard.address")`
+     */
+    bytes32 public constant MODULE_GUARD_STORAGE_SLOT =
+        0xb104e0b93118902c651344349b610029d694cfdec91c589c91ebafbcd0289947;
+
+    /**
      * @notice The delay for the guard removal and delegate allowance
      */
     uint256 public immutable DELAY;
@@ -222,18 +230,29 @@ contract Guardrail is ITransactionGuard, IModuleGuard, MultiSendCallOnlyv2 {
         bytes calldata,
         address
     ) external override {
-        bytes4 selector = _decodeSelector(data);
-        if (to == msg.sender && selector == GuardManager.setGuard.selector) {
-            _removeGuard(msg.sender);
-        }
+        _checkOperationAndAllowance(msg.sender, to, _decodeSelector(data), operation);
+    }
 
-        _checkOperationAndAllowance(msg.sender, to, selector, operation);
+    function _checkAfterExecution() internal {
+        address guard = abi.decode(SafeInterface(msg.sender).getStorageAt(uint256(GUARD_STORAGE_SLOT), 1), (address));
+        address moduleGuard =
+            abi.decode(SafeInterface(msg.sender).getStorageAt(uint256(MODULE_GUARD_STORAGE_SLOT), 1), (address));
+
+        if (guard != address(this) && moduleGuard != address(this)) {
+            _removeGuard(msg.sender);
+        } else if (guard != address(this) || moduleGuard != address(this)) {
+            // This error is thrown if only one of the guard is removed.
+            revert("Guard Not Removed Properly");
+        }
     }
 
     /**
      * @inheritdoc ITransactionGuard
      */
-    function checkAfterExecution(bytes32 hash, bool success) external {}
+    function checkAfterExecution(bytes32, bool) external {
+        // This function is called after the transaction is executed, so we can check if the guard should be removed
+        _checkAfterExecution();
+    }
 
     /**
      * @inheritdoc IModuleGuard
@@ -251,7 +270,10 @@ contract Guardrail is ITransactionGuard, IModuleGuard, MultiSendCallOnlyv2 {
     /**
      * @inheritdoc IModuleGuard
      */
-    function checkAfterModuleExecution(bytes32 txHash, bool success) external {}
+    function checkAfterModuleExecution(bytes32, bool) external {
+        // This function is called after the transaction is executed, so we can check if the guard should be removed
+        _checkAfterExecution();
+    }
 
     /**
      * @inheritdoc IERC165
