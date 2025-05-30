@@ -24,7 +24,16 @@ contract Guardrail is ITransactionGuard, IModuleGuard, MultiSendCallOnlyv2 {
      * @dev This is used to check if the guard is set
      *      Value = `keccak256("guard_manager.guard.address")`
      */
-    bytes32 public constant GUARD_STORAGE_SLOT = 0x4a204f620c8c5ccdca3fd54d003badd85ba500436a431f0cbda4f558c93c34c8;
+    uint256 public constant GUARD_STORAGE_SLOT =
+        uint256(0x4a204f620c8c5ccdca3fd54d003badd85ba500436a431f0cbda4f558c93c34c8);
+
+    /**
+     * @notice The storage slot for the module guard
+     * @dev This is used to check if the module guard is set
+     *      Value = `keccak256("module_manager.module_guard.address")`
+     */
+    uint256 public constant MODULE_GUARD_STORAGE_SLOT =
+        uint256(0xb104e0b93118902c651344349b610029d694cfdec91c589c91ebafbcd0289947);
 
     /**
      * @notice The delay for the guard removal and delegate allowance
@@ -85,6 +94,13 @@ contract Guardrail is ITransactionGuard, IModuleGuard, MultiSendCallOnlyv2 {
     error InvalidSelector();
 
     /**
+     * @notice Error indicating that the guard is not removed properly
+     * @dev This error is thrown to ensure that both the guards should be removed atomically.
+     *      Enabling the guard only for one type (Tx or Module) is not allowed as it doesn't ensure delegate call protection properly.
+     */
+    error GuardNotRemovedProperly();
+
+    /**
      * @param delay The delay for the guard removal and delegate allowance
      */
     constructor(uint256 delay) {
@@ -102,10 +118,9 @@ contract Guardrail is ITransactionGuard, IModuleGuard, MultiSendCallOnlyv2 {
 
     /**
      * @notice Internal function to check if the guard removal is scheduled
-     * @param safe The address of the safe
      */
-    function _removeGuard(address safe) internal {
-        uint256 removalTimestamp = removalSchedule[safe];
+    function _removeGuard() internal {
+        uint256 removalTimestamp = removalSchedule[msg.sender];
         require(removalTimestamp > 0 && removalTimestamp < block.timestamp, InvalidTimestamp());
 
         removalSchedule[msg.sender] = 0;
@@ -222,18 +237,28 @@ contract Guardrail is ITransactionGuard, IModuleGuard, MultiSendCallOnlyv2 {
         bytes calldata,
         address
     ) external override {
-        bytes4 selector = _decodeSelector(data);
-        if (to == msg.sender && selector == GuardManager.setGuard.selector) {
-            _removeGuard(msg.sender);
-        }
+        _checkOperationAndAllowance(msg.sender, to, _decodeSelector(data), operation);
+    }
 
-        _checkOperationAndAllowance(msg.sender, to, selector, operation);
+    function _checkAfterExecution() internal {
+        SafeInterface safe = SafeInterface(msg.sender);
+        address guard = abi.decode(safe.getStorageAt(GUARD_STORAGE_SLOT, 1), (address));
+        address moduleGuard = abi.decode(safe.getStorageAt(MODULE_GUARD_STORAGE_SLOT, 1), (address));
+
+        if (guard != address(this) && moduleGuard != address(this)) {
+            _removeGuard();
+        } else if (guard != address(this) || moduleGuard != address(this)) {
+            revert GuardNotRemovedProperly();
+        }
     }
 
     /**
      * @inheritdoc ITransactionGuard
      */
-    function checkAfterExecution(bytes32 hash, bool success) external {}
+    function checkAfterExecution(bytes32, bool) external {
+        // This function is called after the transaction is executed, so we can check if the guard should be removed
+        _checkAfterExecution();
+    }
 
     /**
      * @inheritdoc IModuleGuard
@@ -251,7 +276,10 @@ contract Guardrail is ITransactionGuard, IModuleGuard, MultiSendCallOnlyv2 {
     /**
      * @inheritdoc IModuleGuard
      */
-    function checkAfterModuleExecution(bytes32 txHash, bool success) external {}
+    function checkAfterModuleExecution(bytes32, bool) external {
+        // This function is called after the transaction is executed, so we can check if the guard should be removed
+        _checkAfterExecution();
+    }
 
     /**
      * @inheritdoc IERC165
