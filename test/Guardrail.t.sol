@@ -103,6 +103,42 @@ contract GuardrailTest is Test {
         );
     }
 
+    // Helper Function to remove the guard in the Safe contract
+    function removeGuardData() private view returns (bytes memory multiSendTxs) {
+        // Setting up the transaction guard to zero address.
+        bytes memory guardRemoveData = abi.encodeWithSelector(safe.setGuard.selector, zeroAddress);
+
+        // Setting up the module guard to zero address.
+        bytes memory moduleGuardRemoveData = abi.encodeWithSelector(safe.setModuleGuard.selector, zeroAddress);
+
+        bytes[] memory txs = new bytes[](2);
+
+        // Transaction guard removal
+        txs[0] = abi.encodePacked(
+            uint8(0), // Operation: Call
+            address(safe), // Address to interact with
+            uint256(0), // Value to send
+            guardRemoveData.length,
+            guardRemoveData // Data
+        );
+
+        // Module guard removal
+        txs[1] = abi.encodePacked(
+            uint8(0), // Operation: Call
+            address(safe), // Address to interact with
+            uint256(0), // Value to send
+            moduleGuardRemoveData.length,
+            moduleGuardRemoveData // Data
+        );
+
+        bytes memory transactions;
+        for (uint256 i = 0; i < txs.length; i++) {
+            transactions = abi.encodePacked(transactions, txs[i]);
+        }
+
+        multiSendTxs = abi.encodeWithSelector(MultiSendCallOnly.multiSend.selector, transactions);
+    }
+
     // Helper Function to create a random address
     function createRandomAddresses(uint256 count) private {
         randomAddresses = new address[](count);
@@ -386,13 +422,13 @@ contract GuardrailTest is Test {
         vm.warp(block.timestamp + DELAY + 1);
 
         // Removing the guard.
-        bytes memory removeGuardData = abi.encodeWithSelector(safe.setGuard.selector, zeroAddress);
+        bytes memory data = removeGuardData();
         vm.prank(owner);
         safe.execTransaction(
-            address(safe),
+            address(guardrail),
             0,
-            removeGuardData,
-            Enum.Operation.Call,
+            data,
+            Enum.Operation.DelegateCall,
             0,
             0,
             0,
@@ -429,13 +465,13 @@ contract GuardrailTest is Test {
         // Expect revert as the removal timestamp is not passed yet.
         vm.expectRevert(Guardrail.InvalidTimestamp.selector);
         // Removing the guard.
-        bytes memory removeGuardData = abi.encodeWithSelector(safe.setGuard.selector, zeroAddress);
+        bytes memory data = removeGuardData();
         vm.prank(owner);
         safe.execTransaction(
-            address(safe),
+            address(guardrail),
             0,
-            removeGuardData,
-            Enum.Operation.Call,
+            data,
+            Enum.Operation.DelegateCall,
             0,
             0,
             0,
@@ -449,7 +485,7 @@ contract GuardrailTest is Test {
     }
 
     // Test function to check the event emitted on guard removal
-    function testGuardRemovalEvent() public {
+    function testGuardRemovalScheduleEvent() public {
         // Setting up the guard.
         setupGuard();
 
