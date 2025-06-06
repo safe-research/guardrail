@@ -94,11 +94,11 @@ contract Guardrail is ITransactionGuard, IModuleGuard, MultiSendCallOnlyv2 {
     error InvalidSelector();
 
     /**
-     * @notice Error indicating that the guard is not removed properly
-     * @dev This error is thrown to ensure that both the guards should be removed atomically.
+     * @notice Error indicating that the guard is not setup properly
+     * @dev This error is thrown to ensure that both the guards should be setup atomically.
      *      Enabling the guard only for one type (Tx or Module) is not allowed as it doesn't ensure delegate call protection properly.
      */
-    error GuardNotRemovedProperly();
+    error ImproperGuardSetup();
 
     /**
      * @param delay The delay for the guard removal and delegate allowance
@@ -133,10 +133,11 @@ contract Guardrail is ITransactionGuard, IModuleGuard, MultiSendCallOnlyv2 {
      * @dev This can be used to set the delegate allowance immediately if the guard is not set
      */
     function immediateDelegateAllowance(address to, bool oneTime) public {
-        require(
-            abi.decode(SafeInterface(msg.sender).getStorageAt(uint256(GUARD_STORAGE_SLOT), 1), (address)) == address(0),
-            GuardAlreadySet()
-        );
+        SafeInterface safe = SafeInterface(msg.sender);
+        // Check if the guard is already set
+        require(abi.decode(safe.getStorageAt(GUARD_STORAGE_SLOT, 1), (address)) == address(0), GuardAlreadySet());
+        // Check if the module guard is already set
+        require(abi.decode(safe.getStorageAt(MODULE_GUARD_STORAGE_SLOT, 1), (address)) == address(0), GuardAlreadySet());
 
         _delegateAllowance(msg.sender, to, oneTime, block.timestamp);
     }
@@ -245,10 +246,13 @@ contract Guardrail is ITransactionGuard, IModuleGuard, MultiSendCallOnlyv2 {
         address guard = abi.decode(safe.getStorageAt(GUARD_STORAGE_SLOT, 1), (address));
         address moduleGuard = abi.decode(safe.getStorageAt(MODULE_GUARD_STORAGE_SLOT, 1), (address));
 
-        if (guard != address(this) && moduleGuard != address(this)) {
+        // Higher chance of this being true, so added the check first as a circuit breaker
+        if (guard == address(this) && moduleGuard == address(this)) {
+            return;
+        } else if (guard != address(this) && moduleGuard != address(this)) {
             _removeGuard();
         } else if (guard != address(this) || moduleGuard != address(this)) {
-            revert GuardNotRemovedProperly();
+            revert ImproperGuardSetup();
         }
     }
 
