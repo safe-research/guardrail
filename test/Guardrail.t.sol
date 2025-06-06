@@ -442,7 +442,7 @@ contract GuardrailTest is Test {
     }
 
     // Test function to check revert if the guard removal timestamp is not passed
-    function testGuardRemovalRevert() public {
+    function testGuardRemovalTimestampRevert() public {
         // Setting up the guard.
         setupGuard();
 
@@ -466,6 +466,62 @@ contract GuardrailTest is Test {
         vm.expectRevert(Guardrail.InvalidTimestamp.selector);
         // Removing the guard.
         bytes memory data = removeGuardData();
+        vm.prank(owner);
+        safe.execTransaction(
+            address(guardrail),
+            0,
+            data,
+            Enum.Operation.DelegateCall,
+            0,
+            0,
+            0,
+            zeroAddress,
+            payableZeroAddress,
+            getExecutorSignature(owner)
+        );
+
+        // Checking if guard is still set.
+        assertEq(abi.decode(safe.getStorageAt(uint256(GUARD_STORAGE_SLOT), 1), (address)), address(guardrail));
+    }
+
+    // Test function to check revert if the guard removal timestamp is not passed
+    function testGuardRemovalSingleRemovalRevert() public {
+        // Setting up the guard.
+        setupGuard();
+
+        // Scheduling the removal of the guard.
+        bytes memory scheduleGuardRemovalData = abi.encodeWithSelector(guardrail.scheduleGuardRemoval.selector);
+        vm.prank(owner);
+        safe.execTransaction(
+            address(guardrail),
+            0,
+            scheduleGuardRemovalData,
+            Enum.Operation.Call,
+            0,
+            0,
+            0,
+            zeroAddress,
+            payableZeroAddress,
+            getExecutorSignature(owner)
+        );
+
+        // Trying to remove only the Tx guard.
+        // Setting up the transaction guard to zero address.
+        bytes memory guardRemoveData = abi.encodeWithSelector(safe.setGuard.selector, zeroAddress);
+
+        // Transaction guard removal
+        bytes memory guardRemovalTx = abi.encodePacked(
+            uint8(0), // Operation: Call
+            address(safe), // Address to interact with
+            uint256(0), // Value to send
+            guardRemoveData.length,
+            guardRemoveData // Data
+        );
+
+        bytes memory data = abi.encodeWithSelector(MultiSendCallOnly.multiSend.selector, guardRemovalTx);
+
+        // Expect revert as only one guard is being removed.
+        vm.expectRevert(Guardrail.ImproperGuardSetup.selector);
         vm.prank(owner);
         safe.execTransaction(
             address(guardrail),

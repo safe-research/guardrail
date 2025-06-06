@@ -3,7 +3,11 @@ pragma solidity =0.7.6;
 import {Safe} from "safe-smart-account/contracts/Safe.sol";
 
 contract SafeHarness is Safe {
-    function getGuardAddress() external view returns (address) {
+    function getTxGuardAddress() external view returns (address) {
         return getGuard();
+    }
+
+    function getModuleGuardAddress() external view returns (address) {
+        return getModuleGuard();
     }
 }
