@@ -22,6 +22,21 @@ methods {
     function _.getStorageAt(uint256, uint256) external => DISPATCHER(true);
 }
 
+// Ghost variable that tracks the last timestamp.
+ghost mathint lastTimestamp {
+    init_state axiom lastTimestamp > 0;
+}
+
+// The maximum timestamp the protocol supports
+definition MAX_TIMESTAMP() returns mathint = max_uint248 - DELAY();
+
+hook TIMESTAMP uint256 time {
+    require time < MAX_TIMESTAMP();
+    require time > 0;
+    require time >= lastTimestamp;
+    lastTimestamp = time;
+}
+
 function requireCurrentContractAsGuard() {
     address txGuard = safe.getTxGuardAddress();
     address moduleGuard = safe.getModuleGuardAddress();
@@ -30,103 +45,137 @@ function requireCurrentContractAsGuard() {
 
 function requireSetup(env e) {
     require e.msg.value == 0;
-    require currentContract != safe;
     require e.msg.sender == safe;    
 }
 
-// Rule: Guard removal without schedule should always revert
-rule guardRemovalWithoutSchedule(env e, method f, calldataarg args) {
+invariant timestampNotInFutureForDelegate(address anySafe, address anyDelegate)
+    getDelegatedAllowanceTimestamp(anySafe, anyDelegate) <= lastTimestamp + DELAY()
+    filtered {
+        f -> f.selector != sig:currentContract.multiSend(bytes).selector &&
+        f.selector != sig:currentContract.multiSendNoValue(bytes).selector
+    }
+
+invariant timestampNotInFutureForGuard(address anySafe)
+    getRemovalSchedule(anySafe) <= lastTimestamp + DELAY()
+    filtered {
+        f -> f.selector != sig:currentContract.multiSend(bytes).selector &&
+        f.selector != sig:currentContract.multiSendNoValue(bytes).selector
+    }
+
+// Rule: Guard should be removed/changed if the removal schedule is zeroed out
+rule guardRemovalWithSchedule(env e, method f, calldataarg args) filtered {
+    f -> f.selector != sig:currentContract.immediateDelegateAllowance(address,bool).selector
+} {
     require e.msg.value == 0;
-    require currentContract != safe;
-    require e.block.timestamp > 0;
     requireCurrentContractAsGuard();
 
     uint256 removalTime = getRemovalSchedule(safe);
 
-    f@withrevert(e, args);
+    f(e, args);
 
     assert removalTime > 0 && getRemovalSchedule(safe) == 0 => safe.getTxGuardAddress() != currentContract && safe.getModuleGuardAddress() != currentContract;
 }
 
 // Rule: Immediate Delegation is only allowed if the guard is not set in the Safe
-rule immediateDelegationAllowance(env e, address delegate, bool allow) {
+rule immediateDelegationAllowance(env e, address delegate, bool oneTime) {
     requireSetup(e);
-    require e.block.timestamp > 0 && e.block.timestamp < max_uint248;
 
-    immediateDelegateAllowance@withrevert(e, delegate, allow);
+    immediateDelegateAllowance(e, delegate, oneTime);
 
-    assert !lastReverted =>
-        safe.getTxGuardAddress() == 0 &&
+    assert safe.getTxGuardAddress() == 0 &&
         safe.getModuleGuardAddress() == 0 &&
-        getDelegatedAllowanceOneTimeBool(safe, delegate) == allow &&
+        getDelegatedAllowanceOneTimeBool(safe, delegate) == oneTime &&
         getDelegatedAllowanceTimestamp(safe, delegate) == e.block.timestamp;
 }
 
 // Rule: A Safe can schedule delegate allowance always
-rule scheduledDelegationAllowance(env e, address delegate, bool allow, bool reset) {
+rule scheduledDelegationAllowance(env e, address delegate, bool oneTime, bool reset) {
     requireSetup(e);
-    require e.block.timestamp > 0 && e.block.timestamp + DELAY() < max_uint248;
 
-    delegateAllowance@withrevert(e, delegate, allow, reset);
+    delegateAllowance@withrevert(e, delegate, oneTime, reset);
 
     assert !lastReverted;
 }
 
 // Rule: A Safe can add a new delegate only after DELAY if the guard is set
-rule addDelegateAfterDelay(env e, address delegate, bool allow) {
+rule addDelegateAfterDelay(env e, address delegate, bool oneTime) {
     requireSetup(e);
-    require e.block.timestamp > 0 && e.block.timestamp + DELAY() < max_uint248;
 
-    delegateAllowance@withrevert(e, delegate, allow, false); // reset is false explicitly
+    delegateAllowance(e, delegate, oneTime, false); // reset is false explicitly
 
-    assert getDelegatedAllowanceOneTimeBool(safe, delegate) == allow && getDelegatedAllowanceTimestamp(safe, delegate) == e.block.timestamp + DELAY();
+    assert getDelegatedAllowanceOneTimeBool(safe, delegate) == oneTime && getDelegatedAllowanceTimestamp(safe, delegate) == e.block.timestamp + DELAY();
 }
 
 // Rule: A Safe can always remove a delegate
-rule removeDelegate(env e, address delegate) {
+rule removeDelegate(env e, address delegate, bool oneTime) {
     requireSetup(e);
 
-    delegateAllowance@withrevert(e, delegate, false, true); // reset is true explicitly
+    delegateAllowance(e, delegate, oneTime, true); // reset is true explicitly
 
-    assert !lastReverted && getDelegatedAllowanceOneTimeBool(safe, delegate) == false && getDelegatedAllowanceTimestamp(safe, delegate) == 0;
+    assert getDelegatedAllowanceOneTimeBool(safe, delegate) == false && getDelegatedAllowanceTimestamp(safe, delegate) == 0;
 }
 
 // Rule: If the delegate call is to Guardrail itself and the call is a MultiSendCallOnly (v1/v2) it should always be allowed
-rule multiSendCallAllowedAlways(env e, bytes data) {
+rule multiSendCallAllowedAlways(env e, uint256 value, bytes data, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address refundReceiver, bytes signature, address msgSender) {
     requireSetup(e);
     requireCurrentContractAsGuard();
     require isMultiSendCallData(data);
 
     // Allow MultiSendCallOnly calls
-    checkTransaction@withrevert(e, currentContract, 0, data, Enum.Operation.DelegateCall, 0, 0, 0, 0, 0, emptyBytes(), 0);
+    checkTransaction@withrevert(e, currentContract, value, data, Enum.Operation.DelegateCall, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, signature, msgSender);
 
     assert !lastReverted;
 }
 
 // Rule: All allowed delegate call (including MultiSendCallOnlyv1/v2 within Guardrail) is allowed always. All the other delegate calls should revert always
-rule allowedDelegateCall(env e, address to, bytes data) {
+rule allowedDelegateCall(env e, address to, uint256 value, bytes data, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address refundReceiver, bytes signature, address msgSender) {
     requireSetup(e);
     requireCurrentContractAsGuard();
 
     bool isOneTimeDelegate = getDelegatedAllowanceOneTimeBool(safe, to);
+    bool allowanceBefore = (getDelegatedAllowanceTimestamp(safe, to) > 0 && getDelegatedAllowanceTimestamp(safe, to) < e.block.timestamp);
 
     // Allow delegate calls to Guardrail itself & allowed delegates
-    checkTransaction@withrevert(e, to, 0, data, Enum.Operation.DelegateCall, 0, 0, 0, 0, 0, emptyBytes(), 0);
+    checkTransaction@withrevert(e, to, value, data, Enum.Operation.DelegateCall, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, signature, msgSender);
     bool success = !lastReverted;
 
-    assert success =>
+    assert success <=>
         decodeSelectorProperly(data) &&
         (
             (to == currentContract && isMultiSendCallData(data)) ||
             (
-                (getDelegatedAllowanceTimestamp(safe, to) > 0 && getDelegatedAllowanceTimestamp(safe, to) <= e.block.timestamp) ||
-                isOneTimeDelegate
+                (getDelegatedAllowanceTimestamp(safe, to) > 0 && getDelegatedAllowanceTimestamp(safe, to) < e.block.timestamp) ||
+                (isOneTimeDelegate && allowanceBefore)
             )
         );
-    assert !success =>
-        !decodeSelectorProperly(data) ||
-        (
-            (to != currentContract || !isMultiSendCallData(data)) ||
-            (getDelegatedAllowanceTimestamp(safe, to) == 0 && getDelegatedAllowanceTimestamp(safe, to) > e.block.timestamp)
-        );
+}
+
+// Rule: It should not be possible to decrease the timestamp of the delegate allowance
+rule delegateAllowanceTimestampNotDecreased(env e, address delegate, calldataarg args, method f) filtered {
+    f -> f.selector != sig:currentContract.immediateDelegateAllowance(address,bool).selector
+} {
+    requireSetup(e);
+    requireCurrentContractAsGuard();
+    requireInvariant timestampNotInFutureForDelegate(safe, delegate);
+
+    uint248 oldTimestamp = getDelegatedAllowanceTimestamp(safe, delegate);
+
+    f(e, args);
+
+    assert getDelegatedAllowanceTimestamp(safe, delegate) >= oldTimestamp || getDelegatedAllowanceTimestamp(safe, delegate) == 0;
+}
+
+// Rule: It should not be possible to decrease the removal schedule timestamp
+rule removalScheduleTimestampNotDecreased(env e, calldataarg args, method f) filtered {
+    f -> f.selector != sig:currentContract.immediateDelegateAllowance(address,bool).selector
+} {
+    requireSetup(e);
+    requireCurrentContractAsGuard();
+    requireInvariant timestampNotInFutureForGuard(safe);
+
+    uint256 oldRemovalSchedule = getRemovalSchedule(safe);
+
+    f(e, args);
+
+    assert getRemovalSchedule(safe) >= oldRemovalSchedule || getRemovalSchedule(safe) == 0;
 }
