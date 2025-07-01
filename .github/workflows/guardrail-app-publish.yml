@@ -43,7 +43,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: webapp/dist
+          path: guardrail-app/dist
 
   # Deployment job
   deploy:
