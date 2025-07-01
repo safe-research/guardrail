@@ -32,6 +32,7 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
+          cache-dependency-path: "guardrail-app/package-lock.json"
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Install dependencies
