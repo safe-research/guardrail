@@ -241,7 +241,7 @@ contract Guardrail is ITransactionGuard, IModuleGuard, MultiSendCallOnlyv2 {
         _checkOperationAndAllowance(msg.sender, to, _decodeSelector(data), operation);
     }
 
-    function _checkAfterExecution() internal virtual{
+    function _checkAfterExecution() internal virtual {
         SafeInterface safe = SafeInterface(msg.sender);
         address guard = abi.decode(safe.getStorageAt(GUARD_STORAGE_SLOT, 1), (address));
         address moduleGuard = abi.decode(safe.getStorageAt(MODULE_GUARD_STORAGE_SLOT, 1), (address));
