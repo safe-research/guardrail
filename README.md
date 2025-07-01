@@ -1,5 +1,7 @@
 # Guardrail
 
+![Guardrail](./guardrail-app/public/guardrail.png)
+
 A guard contract restricting `DELEGATECALL` in safe smart account.
 
 ## Usage
@@ -26,4 +28,10 @@ $ forge fmt
 
 ```shell
 $ forge snapshot
+```
+
+### For running the app
+
+```shell
+$ npm run dev
 ```

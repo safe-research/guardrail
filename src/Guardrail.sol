@@ -150,7 +150,7 @@ contract Guardrail is ITransactionGuard, IModuleGuard, MultiSendCallOnlyv2 {
      * @param oneTimeAllowance The status of the one time allowance
      * @dev This will emit the DelegateAllowanceUpdated event
      */
-    function _delegateAllowance(address safe, address to, bool oneTimeAllowance, uint256 timestamp) internal {
+    function _delegateAllowance(address safe, address to, bool oneTimeAllowance, uint256 timestamp) internal virtual {
         delegatedAllowance[safe][to] = Allowance(oneTimeAllowance, uint248(timestamp));
 
         emit DelegateAllowanceUpdated(safe, to, oneTimeAllowance, timestamp);
@@ -163,7 +163,7 @@ contract Guardrail is ITransactionGuard, IModuleGuard, MultiSendCallOnlyv2 {
      * @param reset true if the delegate allowance should be reset
      * @dev This will fail if the delegate allowance is not scheduled
      */
-    function delegateAllowance(address to, bool oneTimeAllowance, bool reset) public {
+    function delegateAllowance(address to, bool oneTimeAllowance, bool reset) public virtual {
         if (reset) {
             delete delegatedAllowance[msg.sender][to];
         } else {
@@ -241,7 +241,7 @@ contract Guardrail is ITransactionGuard, IModuleGuard, MultiSendCallOnlyv2 {
         _checkOperationAndAllowance(msg.sender, to, _decodeSelector(data), operation);
     }
 
-    function _checkAfterExecution() internal {
+    function _checkAfterExecution() internal virtual{
         SafeInterface safe = SafeInterface(msg.sender);
         address guard = abi.decode(safe.getStorageAt(GUARD_STORAGE_SLOT, 1), (address));
         address moduleGuard = abi.decode(safe.getStorageAt(MODULE_GUARD_STORAGE_SLOT, 1), (address));
