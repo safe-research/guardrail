@@ -6,7 +6,7 @@
     {
       "src": "guardrailWhiteBorder.svg",
       "sizes": "256x256",
-      "type": "image/svg"
+      "type": "image/svg+xml"
     }
   ]
 }
