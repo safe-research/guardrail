@@ -115,7 +115,7 @@ function App() {
       console.log(`Delegate: ${delegate}, Allowed Timestamp: ${result.allowedTimestamp}, One Time: ${result.oneTimeAllowance}`)
       return {
         delegate,
-        allowedTimestamp: result.allowedTimestamp,
+        allowedTimestamp: result.allowedTimestamp * 1000n, // Convert to milliseconds
         oneTime: result.oneTimeAllowance
       }
     } catch (error) {
@@ -262,7 +262,7 @@ function App() {
         txs
       })
     } catch (error) {
-      setErrorMessage('Failed to schedule delegate allowance: ' + error)
+      setErrorMessage('Failed to set immediate delegate allowance: ' + error)
     } finally {
       setLoading(false)
     }
@@ -433,7 +433,7 @@ function App() {
                                 {delegate.delegate}
                               </TableCell>
                               <TableCell>
-                                {delegate.allowedTimestamp < BigInt(Date.now()) ? 'Yes' : 'Will be active at ' + new Date(Number(delegate.allowedTimestamp) * 1000).toLocaleString()}
+                                {delegate.allowedTimestamp < BigInt(Date.now()) ? 'Yes' : 'Will be active at ' + new Date(Number(delegate.allowedTimestamp)).toLocaleString()}
                               </TableCell>
                               <TableCell>
                                 {delegate.oneTime ? 'Yes' : 'No'}
