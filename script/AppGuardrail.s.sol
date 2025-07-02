@@ -12,7 +12,7 @@ contract AppGuardrailScript is Script {
     function run() public {
         vm.startBroadcast(vm.envUint("PRIVATE_KEY"));
 
-        uint256 delay = 0;
+        uint256 delay = 180;
         appGuardrail = new AppGuardrail(delay);
 
         vm.stopBroadcast();

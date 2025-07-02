@@ -197,6 +197,7 @@ contract Guardrail is ITransactionGuard, IModuleGuard, MultiSendCallOnlyv2 {
      */
     function _checkOperationAndAllowance(address safe, address to, bytes4 selector, Enum.Operation operation)
         internal
+        virtual
     {
         if (
             to == address(this)

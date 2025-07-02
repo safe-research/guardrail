@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 pragma solidity =0.8.28;
 
-import {Guardrail} from "../Guardrail.sol";
+import {Guardrail, Enum, MultiSendCallOnly, MultiSendCallOnlyv2} from "../Guardrail.sol";
 import {SafeInterface} from "../interfaces/SafeInterface.sol";
 import {ITransactionGuard} from "safe-smart-account/contracts/base/GuardManager.sol";
 import {IModuleGuard} from "safe-smart-account/contracts/base/ModuleManager.sol";
@@ -16,6 +16,44 @@ contract AppGuardrail is Guardrail {
      * @param delay The delay for the guard removal and delegate allowance
      */
     constructor(uint256 delay) Guardrail(delay) {}
+
+    /**
+     * @notice Function to check if the delegate is allowed if the operation is delegate call
+     * @param safe The address of the safe
+     * @param to The address of the delegate
+     * @param operation The operation to check
+     * @dev This will revert if the operation is delegate call, but the {to} is not a allowed delegate. This will also
+     *      remove the delegate allowance if the one time allowance is set
+     *      This will allow the delegate call if the {to} is the guard contract itself (for MultiSendCallOnly functionality)
+     *      This will also remove from the delegates list if it is a one time allowance.
+     */
+    function _checkOperationAndAllowance(address safe, address to, bytes4 selector, Enum.Operation operation)
+        internal
+        override
+    {
+        if (
+            to == address(this)
+                && (
+                    selector == MultiSendCallOnly.multiSend.selector
+                        || selector == MultiSendCallOnlyv2.multiSendNoValue.selector
+                )
+        ) {
+            return;
+        }
+
+        if (operation == Enum.Operation.DelegateCall) {
+            Allowance memory allowance = delegatedAllowance[safe][to];
+            require(
+                allowance.allowedTimestamp > 0 && allowance.allowedTimestamp < block.timestamp,
+                DelegateCallNotAllowed(to)
+            );
+
+            if (allowance.oneTimeAllowance) {
+                delete delegatedAllowance[safe][to];
+                delegates[safe].remove(to);
+            }
+        }
+    }
 
     /**
      * @notice This function is called after the execution of a transaction to check if the guard is set up correctly.
