@@ -7,7 +7,7 @@ import { ethers } from 'ethers';
 import Button from '@mui/material/Button';
 import { Alert, Checkbox, FormControlLabel, FormGroup, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField } from '@mui/material'
 
-const GUARDRAIL_ADDRESS = ethers.getAddress(`0x242d70d3DdE2FC64b57457161F5188b2246019F8`) // Sepolia address of the App Guardrail contract
+const GUARDRAIL_ADDRESS = ethers.getAddress(`0xe809d81ac67b3629a5dab4e0293f64537353f40d`) // Sepolia address of the App Guardrail contract
 const GUARD_STORAGE_SLOT = `0x4a204f620c8c5ccdca3fd54d003badd85ba500436a431f0cbda4f558c93c34c8` // Storage slot for the Tx Guard in the Safe contract
 // const MODULE_GUARD_STORAGE_SLOT = `0xb104e0b93118902c651344349b610029d694cfdec91c589c91ebafbcd0289947` // Storage slot for the Module Guard in the Safe contract
 
@@ -97,7 +97,7 @@ function App() {
       // Check if the Tx Guard removal is already set
       const result = await call(sdk, GUARDRAIL_ADDRESS, "removalSchedule", [ethers.getAddress(safe.safeAddress)])
       if (result > 0n) {
-        setRemovalTimestamp(result)
+        setRemovalTimestamp(result * 1000n) // Convert to milliseconds
       }
     } catch (error) {
       setErrorMessage('Failed to fetch guard removal info with error: ' + error)
@@ -294,9 +294,18 @@ function App() {
                     </div>
                   ) : (
                     <div className="card">
-                      <Button variant="contained" color="error" onClick={() => activateGuardrail(false)} disabled={loading}>
-                        {loading ? 'Submitting transaction...' : 'Disable Guardrail'}
-                      </Button>
+                      {removalTimestamp > 0n && removalTimestamp < BigInt(Date.now()) ? (
+                        <Button variant="contained" color="error" onClick={() => activateGuardrail(false)} disabled={loading}>
+                          {loading ? 'Submitting transaction...' : 'Deactivate Guardrail'}
+                        </Button>
+                      ) : (
+                        <>
+                          <Alert severity="info" style={{margin:'1em'}}>Guardrail Removal Scheduled for {new Date(Number(removalTimestamp)).toLocaleString()}</Alert>
+                          <Button variant="contained" color="error" style={{color:'grey',border:'1px solid',borderColor:'grey'}} disabled>
+                            {'Deactivate Guardrail'}
+                          </Button>                        
+                        </>
+                      )}
                     </div>
                   )
                 :

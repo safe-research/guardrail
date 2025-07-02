@@ -196,7 +196,7 @@ contract Guardrail is ITransactionGuard, IModuleGuard, MultiSendCallOnlyv2 {
      *      This will allow the delegate call if the {to} is the guard contract itself (for MultiSendCallOnly functionality)
      */
     function _checkOperationAndAllowance(address safe, address to, bytes4 selector, Enum.Operation operation)
-        internal
+        internal virtual
     {
         if (
             to == address(this)
