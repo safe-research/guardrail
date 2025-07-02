@@ -28,7 +28,8 @@ contract AppGuardrail is Guardrail {
      *      This will also remove from the delegates list if it is a one time allowance.
      */
     function _checkOperationAndAllowance(address safe, address to, bytes4 selector, Enum.Operation operation)
-        internal override
+        internal
+        override
     {
         if (
             to == address(this)
