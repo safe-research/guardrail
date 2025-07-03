@@ -6,7 +6,10 @@ methods {
     function getModuleGuardAddress() external returns (address) envfree;
 
     // Guardrail functions
-    function guardrail.checkTransaction(address to, uint256 , bytes data, Enum.Operation operation, uint256 , uint256 , uint256 , address , address , bytes , address ) external => checkTransactionSummary(to, data, operation);
+    function guardrail.checkTransaction(address to, uint256, bytes data, Enum.Operation operation, uint256, uint256, uint256, address, address, bytes, address) external => checkTransactionSummary(to, data, operation);
+
+    // The false means not-optimistic, i.e., the prover checks that the call is really to one of the contracts in the scene.
+    function _.checkTransaction(address to, uint256, bytes data, Enum.Operation operation, uint256, uint256, uint256, address, address, bytes, address) external => DISPATCHER(false);
 }
 
 function checkTransactionSummary(address to, bytes data, Enum.Operation operation) {
