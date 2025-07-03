@@ -30,6 +30,8 @@ ghost mathint lastTimestamp {
 // The maximum timestamp the protocol supports
 definition MAX_TIMESTAMP() returns mathint = max_uint248 - DELAY();
 
+// This is to ensure that the timestamp is always in the future
+// and is not decreased, not zero or max timestamp.
 hook TIMESTAMP uint256 time {
     require time < MAX_TIMESTAMP();
     require time > 0;
@@ -37,17 +39,22 @@ hook TIMESTAMP uint256 time {
     lastTimestamp = time;
 }
 
+// A helper function to require that the current contract is the tx and module guard
 function requireCurrentContractAsGuard() {
     address txGuard = safe.getTxGuardAddress();
     address moduleGuard = safe.getModuleGuardAddress();
     require txGuard == moduleGuard && txGuard == currentContract;
 }
 
+// A helper function to require that no value is sent in the transaction
+// and the sender is the safe address.
 function requireSetup(env e) {
     require e.msg.value == 0;
     require e.msg.sender == safe;    
 }
 
+// Invariants: The timestamp of the delegate allowance should not be higher than the current timestamp + DELAY
+// This is to ensure that the delegate can be used after DELAY from the current timestamp
 invariant timestampNotInFutureForDelegate(address anySafe, address anyDelegate)
     getDelegatedAllowanceTimestamp(anySafe, anyDelegate) <= lastTimestamp + DELAY()
     filtered {
@@ -55,6 +62,8 @@ invariant timestampNotInFutureForDelegate(address anySafe, address anyDelegate)
         f.selector != sig:currentContract.multiSendNoValue(bytes).selector
     }
 
+// Invariants: The removal schedule should not be higher than the current timestamp + DELAY
+// This is to ensure that the guard can be removed after DELAY from the current timestamp
 invariant timestampNotInFutureForGuard(address anySafe)
     getRemovalSchedule(anySafe) <= lastTimestamp + DELAY()
     filtered {
