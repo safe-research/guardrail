@@ -1,0 +1,14 @@
+# Ignore everything by default
+*
+
+# Allow specific file types
+!.gitignore
+!.prettierrc
+!*.js
+!*.json
+!*.ts
+!*.tsx
+!*.md
+!*.svg
+!*.html
+!*.css

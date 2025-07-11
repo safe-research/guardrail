@@ -19,34 +19,10 @@ import {
   TableRow,
   TextField,
 } from '@mui/material'
+import { CONTRACT_INTERFACE_ABI, GUARD_STORAGE_SLOT, GUARDRAIL_ADDRESS, MILLISECONDS_IN_SECOND } from './constants'
+import type { ImmediateDelegateAllowanceFormData, ScheduleDelegateAllowanceFormData } from './types'
 
-const GUARDRAIL_ADDRESS = ethers.getAddress(
-  `0xe809d81ac67b3629a5dab4e0293f64537353f40d`,
-) // Sepolia address of the App Guardrail contract
-const GUARD_STORAGE_SLOT = `0x4a204f620c8c5ccdca3fd54d003badd85ba500436a431f0cbda4f558c93c34c8` // Storage slot for the Tx Guard in the Safe contract
-// const MODULE_GUARD_STORAGE_SLOT = `0xb104e0b93118902c651344349b610029d694cfdec91c589c91ebafbcd0289947` // Storage slot for the Module Guard in the Safe contract
-
-const CONTRACT_INTERFACE = new ethers.Interface([
-  'function setGuard(address guard)',
-  // "function setModuleGuard(address moduleGuard)",
-  'function getStorageAt(uint256 offset, uint256 length) public view returns (bytes memory)',
-  'function removalSchedule(address safe) public view returns (uint256)',
-  'function scheduleGuardRemoval() public',
-  'function delegateAllowance(address to, bool oneTimeAllowance, bool reset) public',
-  'function immediateDelegateAllowance(address to, bool oneTime) public',
-  'function getDelegates(address account) external view returns (address[] memory)',
-  'function delegatedAllowance(address safe, address delegate) external view returns (tuple(bool oneTimeAllowance, uint256 allowedTimestamp) memory)',
-])
-
-interface ImmediateDelegateAllowanceFormData {
-  delegateAddress: string
-  allowOnce: boolean
-}
-
-interface ScheduleDelegateAllowanceFormData
-  extends ImmediateDelegateAllowanceFormData {
-  reset: boolean
-}
+const CONTRACT_INTERFACE = new ethers.Interface(CONTRACT_INTERFACE_ABI)
 
 const call = async (
   sdk: SafeAppsSDK,
@@ -134,7 +110,7 @@ function App() {
         ethers.getAddress(safe.safeAddress),
       ])
       if (result > 0n) {
-        setRemovalTimestamp(result * 1000n) // Convert to milliseconds
+        setRemovalTimestamp(result * MILLISECONDS_IN_SECOND) // Convert to milliseconds
       }
     } catch (error) {
       setErrorMessage('Failed to fetch guard removal info with error: ' + error)
@@ -160,7 +136,7 @@ function App() {
         )
         return {
           delegate,
-          allowedTimestamp: result.allowedTimestamp * 1000n, // Convert to milliseconds
+          allowedTimestamp: result.allowedTimestamp * MILLISECONDS_IN_SECOND, // Convert to milliseconds
           oneTime: result.oneTimeAllowance,
         }
       } catch (error) {

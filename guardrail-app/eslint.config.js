@@ -7,7 +7,7 @@ import eslintConfigPrettier from 'eslint-config-prettier'
 import eslintPluginPrettier from 'eslint-plugin-prettier'
 
 export default tseslint.config(
-  { ignores: ['dist'] },
+  { ignores: ['dist', 'node_modules', '*.config.js'] },
   {
     extends: [
       js.configs.recommended,
@@ -18,11 +18,15 @@ export default tseslint.config(
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
     },
     plugins: {
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
-      eslintPluginPrettier,
+      prettier: eslintPluginPrettier,
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
@@ -30,6 +34,7 @@ export default tseslint.config(
         'warn',
         { allowConstantExport: true },
       ],
+      'prettier/prettier': 'error',
     },
-  },
+  }
 )
