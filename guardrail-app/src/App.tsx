@@ -19,7 +19,7 @@ import {
   TableRow,
   TextField,
 } from '@mui/material'
-import { CONTRACT_INTERFACE_ABI, GUARD_STORAGE_SLOT, GUARDRAIL_ADDRESS, MILLISECONDS_IN_SECOND } from './constants'
+import { CONTRACT_INTERFACE_ABI, GUARD_STORAGE_SLOT, GUARDRAIL_ADDRESS, MILLISECONDS_IN_SECOND, MULTISEND_CALL_ONLY } from './constants'
 import type { ImmediateDelegateAllowanceFormData, ScheduleDelegateAllowanceFormData } from './types'
 
 const CONTRACT_INTERFACE = new ethers.Interface(CONTRACT_INTERFACE_ABI)
@@ -219,8 +219,17 @@ function App() {
       setLoading(true)
       setErrorMessage(null)
       const guardAddress = activate ? GUARDRAIL_ADDRESS : ethers.ZeroAddress
+      const immediateMultiSendCallOnlyAllowance = {
+        to: GUARDRAIL_ADDRESS,
+        value: '0',
+        data: CONTRACT_INTERFACE.encodeFunctionData(
+          'immediateDelegateAllowance',
+          [ethers.getAddress(MULTISEND_CALL_ONLY), false],
+        ),
+      }
       try {
         const txs: BaseTransaction[] = [
+          ...(activate ? [immediateMultiSendCallOnlyAllowance] : []),
           {
             to: safe.safeAddress,
             value: '0',
