@@ -1,7 +1,8 @@
 import { ethers } from 'ethers';
 
 // Configuration constants for the Guardrail app
-export const GUARDRAIL_ADDRESS = ethers.getAddress('0xe809d81ac67b3629a5dab4e0293f64537353f40d'); // Sepolia  
+export const GUARDRAIL_ADDRESS = ethers.getAddress('0xe809d81ac67b3629a5dab4e0293f64537353f40d'); // Sepolia
+export const MULTISEND_CALL_ONLY = ethers.getAddress('0x9641d764fc13c8B624c04430C7356C1C7C8102e2'); // Sepolia
 
 // Storage slots for Safe contract
 export const GUARD_STORAGE_SLOT = '0x4a204f620c8c5ccdca3fd54d003badd85ba500436a431f0cbda4f558c93c34c8' as const
