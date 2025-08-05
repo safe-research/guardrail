@@ -21,6 +21,7 @@ import {
 } from '@mui/material'
 import { CONTRACT_INTERFACE_ABI, GUARD_STORAGE_SLOT, GUARDRAIL_ADDRESS, MILLISECONDS_IN_SECOND, MULTISEND_CALL_ONLY } from './constants'
 import type { ImmediateDelegateAllowanceFormData, ScheduleDelegateAllowanceFormData } from './types'
+import { SafeResearchBanner, SafeResearchFooter } from './components/SafeResearch'
 
 const CONTRACT_INTERFACE = new ethers.Interface(CONTRACT_INTERFACE_ABI)
 
@@ -334,9 +335,7 @@ function App() {
 
   return (
     <>
-      <div className="card">
-        <Alert severity="warning">This demo is an experimental beta release. Code is not audited. Use at your own risk.</Alert>
-      </div>
+      <SafeResearchBanner />
       <div>
         <a href="https://github.com/safe-research/guardrail" target="_blank">
           <img
@@ -657,6 +656,7 @@ function App() {
         )}
         {errorMessage ? <p className="error">{errorMessage}</p> : null}
       </div>
+      <SafeResearchFooter repo='guardrail' />
     </>
   )
 }
